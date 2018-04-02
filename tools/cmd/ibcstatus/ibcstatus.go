@@ -44,11 +44,8 @@ func main() {
 	// Parse command line flags.
 	if _, err := parser.Parse(); err != nil {
 		if flagsErr, ok := err.(*flags.Error); ok && flagsErr.Type == flags.ErrHelp {
-			fmt.Println("1")
 			os.Exit(0)
 		} else {
-			fmt.Println("Invaid parameters: ", err)
-			fmt.Println("2")
 			os.Exit(1)
 		}
 	}
