@@ -1,0 +1,1 @@
+IBC Status connects to an ethernet-connected IBC Boiler and displays the a snapshot of the current status.
