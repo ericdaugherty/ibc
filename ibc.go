@@ -183,14 +183,9 @@ func (lsd LoadStatusData) LoadTypeName() string {
 	return loadName(lsd.Type)
 }
 
-// func (bs BoilerStatus) StatusString() {
-// 	return
-// }
-
+// Block of constants define Request types.
 const (
-	// ReqMasterBoiler is request number for Master Boiler Data
-	ReqMasterBoilerData = 2
-	// ReqBoilerStatusData is request number for Boiler Status Data
+	ReqMasterBoilerData          = 2
 	ReqBoilerStatusData          = 3
 	ReqBoilerRunProfileData      = 5
 	ReqBoilerLogData             = 6
