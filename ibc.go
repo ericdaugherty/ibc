@@ -8,6 +8,13 @@ import (
 	"strings"
 )
 
+// System Status Constants
+const (
+	Standby     = 0
+	Heating     = 3
+	Circulating = 4
+)
+
 // Boiler represents a specific IBC Boiler to interact with.
 type Boiler struct {
 	BaseURL string

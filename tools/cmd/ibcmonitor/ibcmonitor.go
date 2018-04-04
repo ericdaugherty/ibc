@@ -178,7 +178,10 @@ func checkErrors() {
 		fmt.Println("Error retrieving data: ", err)
 		return
 	}
-	if boilerData.Status != 0 || boilerData.Warnings > 0 {
+	if (boilerData.Status != ibc.Standby &&
+		boilerData.Status != ibc.Heating &&
+		boilerData.Status != ibc.Circulating) ||
+		boilerData.Warnings > 0 {
 		if time.Now().After(lastEmailSent.Add(time.Duration(opts.EmailMuteDuration) * time.Minute)) {
 			emailStatus()
 		}
