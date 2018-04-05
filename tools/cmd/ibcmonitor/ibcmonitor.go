@@ -55,6 +55,7 @@ var opts struct {
 	EmailUser         string   `short:"l" long:"emailUser" description:"The SMTP Username to use, if needed."`
 	EmailPass         string   `short:"p" long:"emailPass" description:"The SMTP Password to use, if needed."`
 	EmailMuteDuration int      `short:"m" long:"emailMuteMinutes" description:"The amount of time to wait between sending emails." default:"60"`
+	EmailOnStartup    bool     `long:"emailOnStart" description:"Send an email on startup when this flag is present."`
 }
 var parser = flags.NewParser(&opts, flags.Default)
 
@@ -93,6 +94,10 @@ func main() {
 }
 
 func monitor(ctx context.Context) {
+
+	if opts.EmailOnStartup {
+		emailStatus()
+	}
 
 	ticker := time.NewTicker(5 * time.Minute)
 	t := time.Now()
