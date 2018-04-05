@@ -90,14 +90,18 @@ func main() {
 		}
 	}()
 
+	// Send email to validate settings if flag set.
+	if opts.EmailOnStartup {
+		emailStatus()
+	}
+
+	// Touch the CSV file to verify the path is valid.
+	touchCSV()
+
 	monitor(ctx)
 }
 
 func monitor(ctx context.Context) {
-
-	if opts.EmailOnStartup {
-		emailStatus()
-	}
 
 	ticker := time.NewTicker(5 * time.Minute)
 	t := time.Now()
@@ -170,6 +174,19 @@ func recordDailyCycles(t time.Time) {
 	}
 	if sendWeekly {
 		sendWeeklySummary()
+	}
+}
+
+func touchCSV() {
+	f, err := os.OpenFile(opts.DailyLogFile, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+	if err != nil {
+		log.Fatal(err)
+	}
+	f.Close()
+	now := time.Now()
+	err = os.Chtimes(opts.DailyLogFile, now, now)
+	if err != nil {
+		log.Fatal(err)
 	}
 }
 
