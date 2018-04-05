@@ -1,3 +1,4 @@
 reference
-run.sh
+/tools/cmd/ibcmonitor/*.sh
+/tools/cmd/test
 daily.csv
