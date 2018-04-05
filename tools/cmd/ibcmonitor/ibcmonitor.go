@@ -124,7 +124,7 @@ func recordDailyCycles(t time.Time) {
 			return
 		}
 
-		out := fmt.Sprintf("%s,%d", t.Format("2006-01-02 15:04"), bedd.Cycles)
+		out := fmt.Sprintf("%s,%d", t.Format("2006-01-02"), bedd.Cycles)
 		lsd, err := b.GetLoadStatusData()
 		if err != nil {
 			log.Println(err)
