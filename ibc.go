@@ -11,6 +11,7 @@ import (
 // System Status Constants
 const (
 	Standby     = 0
+	Igniting    = 1
 	Heating     = 3
 	Circulating = 4
 )

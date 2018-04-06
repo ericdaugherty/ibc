@@ -298,6 +298,7 @@ func checkErrors() {
 		return
 	}
 	if (boilerData.Status != ibc.Standby &&
+		boilerData.Status != ibc.Igniting &&
 		boilerData.Status != ibc.Heating &&
 		boilerData.Status != ibc.Circulating) ||
 		boilerData.Warnings > 0 {
