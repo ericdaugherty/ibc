@@ -359,9 +359,7 @@ func executeTemplate(templateBody string, data interface{}, w io.Writer) {
 func emailResult(subject string, body string) {
 	m := gomail.NewMessage()
 	m.SetHeader("From", opts.EmailFrom)
-	for _, to := range opts.EmailTo {
-		m.SetHeader("To", to)
-	}
+	m.SetHeader("To", opts.EmailTo...)
 	m.SetHeader("Subject", subject)
 	m.SetBody("text/html", body)
 
