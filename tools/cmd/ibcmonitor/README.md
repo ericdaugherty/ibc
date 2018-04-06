@@ -19,7 +19,7 @@ Date,Total,Load 1,Load 2,Load 3,Load 4
 
 ### Weekly Notification
 
-Coming Soon
+An email is sent weekly (Saturday night) that contains a summary of the amount of times the boiler cycled each week.
 
 ### Error and Warning Monitor
 If your boiler starts issuing warnings or errors, it is important to be notified quickly. The IBC Monitor tool will check the status of the boiler every 5 minutes and send an email
