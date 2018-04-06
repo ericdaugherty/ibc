@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bufio"
 	"bytes"
 	"context"
 	"fmt"
@@ -9,6 +10,8 @@ import (
 	"log"
 	"os"
 	"os/signal"
+	"strconv"
+	"strings"
 	"time"
 
 	"github.com/ericdaugherty/ibc"
@@ -40,16 +43,40 @@ Heat Output: {{.lsd.HeatOut}} MBtu<br/>
 Load Cycles: {{.lsd.Cycles}}<br/>
 </div>`
 
+var weeklySummaryHTML = `<div>
+<h1>Boiler Weekly Summary</h1>
+{{range $index, $element := .Days}}
+<div>
+<h3>{{index . 0}}</h3>
+Total Cycles: {{index . 1}}<br/>
+Load 1: {{index . 2}}<br/>
+Load 2: {{index . 3}}<br/>
+Load 3: {{index . 4}}<br/>
+Load 4: {{index . 5}}<br/>
+</div>
+{{end}}
+<div>
+<h2>Weekly Comparison:</h2>
+<table>
+<tr><th>Week</th><th>Total</th><th>Load 1</th><th>Load 2</th><th>Load 3</th><th>Load 4</th></tr>
+<tr><td>This Week</td>{{range $i, $e := .TotalCyclesCurrent}}<td>{{$e}}</td>{{end}}</tr>
+<tr><td>Last Week</td>{{range $i, $e := .TotalCyclesLast}}<td>{{$e}}</td>{{end}}</tr>
+<tr><td>Delta</td>{{range $i, $e := .DeltaCycles}}<td>{{$e}}</td>{{end}}</tr>
+</table>
+</div>
+</body>
+`
+
 var b ibc.Boiler
 var lastDateRecorded int
 var lastEmailSent time.Time
+var fileRowLength = 2 * (6 + (3 * 5)) // Assume 2 bytes per Char, Date + 2 digits and comma for total cycles pluse each load.
 
 var opts struct {
 	BoilerURL         string   `short:"u" long:"url" description:"URL of the Boiler, ex -u \"http://192.168.10.2/\"" required:"true"`
 	DailyLogFile      string   `short:"o" long:"csvOutputFile" description:"Path to csv of daily cycles." required:"true"`
 	EmailFrom         string   `short:"f" long:"emailFrom" description:"The email address to use for the FROM setting." required:"true"`
 	EmailTo           []string `short:"t" long:"emailTo" description:"The email address to use for the TO setting. Can specify multiple." required:"true"`
-	EmailSubject      string   `long:"emailSubject" description:"The email address to use for the FROM setting." default:"IBC Boiler Alert"`
 	EmailServer       string   `short:"s" long:"emailServer" description:"The SMTP Server to use to send the email." required:"true"`
 	EmailPort         int      `long:"emailServerPort" description:"The port to use to connect to the SMTP Server" default:"587"`
 	EmailUser         string   `short:"l" long:"emailUser" description:"The SMTP Username to use, if needed."`
@@ -90,11 +117,6 @@ func main() {
 		}
 	}()
 
-	// Send email to validate settings if flag set.
-	if opts.EmailOnStartup {
-		emailStatus()
-	}
-
 	// Touch the CSV file to verify the path is valid.
 	touchCSV()
 
@@ -106,7 +128,11 @@ func monitor(ctx context.Context) {
 	ticker := time.NewTicker(5 * time.Minute)
 	t := time.Now()
 	recordDailyCycles(t)
-	checkErrors()
+	if opts.EmailOnStartup {
+		emailStatus()
+	} else {
+		checkErrors()
+	}
 
 	log.Println("Monitoring...")
 	for {
@@ -152,9 +178,6 @@ func recordDailyCycles(t time.Time) {
 		if err != nil {
 			log.Fatal(err)
 		}
-		defer func() {
-			f.Close()
-		}()
 
 		info, err := f.Stat()
 		if err != nil {
@@ -169,6 +192,10 @@ func recordDailyCycles(t time.Time) {
 
 		// Write the data.
 		if _, err := f.Write([]byte(out + "\n")); err != nil {
+			log.Fatal(err)
+		}
+
+		if err = f.Close(); err != nil {
 			log.Fatal(err)
 		}
 	}
@@ -191,7 +218,77 @@ func touchCSV() {
 }
 
 func sendWeeklySummary() {
+	f, err := os.Open(opts.DailyLogFile)
+	stat, err := os.Stat(opts.DailyLogFile)
+	if err != nil {
+		log.Println(err)
+		return
+	}
 
+	targetRowSize := int64(20 * fileRowLength) // Read approx the last 20 rows to be safe.
+
+	if stat.Size() > (targetRowSize) {
+		f.Seek((stat.Size() - (targetRowSize)), 0)
+	}
+
+	lines := make([]string, 0, 30)
+
+	scanner := bufio.NewScanner(f)
+	for scanner.Scan() {
+		lines = append(lines, scanner.Text())
+	}
+
+	i := 0
+	if len(lines) > 7 {
+		i = len(lines) - 7
+	}
+
+	emailBuf := new(bytes.Buffer)
+	emailBuf.WriteString("<body>")
+
+	totalCurrent := []int{0, 0, 0, 0, 0}
+	totalLast := []int{0, 0, 0, 0, 0}
+	delta := []int{0, 0, 0, 0, 0}
+
+	days := make([][]string, 0, 7)
+	for ; i < len(lines); i++ {
+		vals := strings.Split(lines[i], ",")
+		if vals[0] == "Date" {
+			continue
+		}
+		days = append(days, vals)
+		for j := 1; j < 6; j++ {
+			t, _ := strconv.ParseInt(vals[j], 10, 0)
+			totalCurrent[j-1] += int(t)
+		}
+	}
+
+	if len(lines) >= 14 {
+		i = len(lines) - 14
+
+		for ; i < len(lines)-7; i++ {
+			vals := strings.Split(lines[i], ",")
+			if vals[0] == "Date" {
+				continue
+			}
+			for j := 1; j < 6; j++ {
+				t, _ := strconv.ParseInt(vals[j], 10, 0)
+				totalLast[j-1] += int(t)
+			}
+		}
+	}
+
+	for i, n := range totalCurrent {
+		delta[i] = n - totalLast[i]
+	}
+
+	templateData := make(map[string]interface{})
+	templateData["Days"] = days
+	templateData["TotalCyclesCurrent"] = totalCurrent
+	templateData["TotalCyclesLast"] = totalLast
+	templateData["DeltaCycles"] = delta
+	executeTemplate(weeklySummaryHTML, templateData, emailBuf)
+	emailResult("Weekly Boiler Summary", emailBuf.String())
 }
 
 func checkErrors() {
@@ -243,7 +340,7 @@ func emailStatus() {
 	}
 
 	emailBuf.WriteString("</body>")
-	emailResult(emailBuf.String())
+	emailResult("Boiler Alert", emailBuf.String())
 }
 
 func executeTemplate(templateBody string, data interface{}, w io.Writer) {
@@ -259,13 +356,13 @@ func executeTemplate(templateBody string, data interface{}, w io.Writer) {
 	}
 }
 
-func emailResult(body string) {
+func emailResult(subject string, body string) {
 	m := gomail.NewMessage()
 	m.SetHeader("From", opts.EmailFrom)
 	for _, to := range opts.EmailTo {
 		m.SetHeader("To", to)
 	}
-	m.SetHeader("Subject", opts.EmailSubject)
+	m.SetHeader("Subject", subject)
 	m.SetBody("text/html", body)
 
 	d := gomail.NewDialer(opts.EmailServer, opts.EmailPort, opts.EmailUser, opts.EmailPass)

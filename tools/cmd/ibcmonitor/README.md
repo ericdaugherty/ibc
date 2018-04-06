@@ -24,6 +24,8 @@ Coming Soon
 ### Error and Warning Monitor
 If your boiler starts issuing warnings or errors, it is important to be notified quickly. The IBC Monitor tool will check the status of the boiler every 5 minutes and send an email
 
+## Usage
+
 Download and compile this tool locally or use the [Docker image](https://hub.docker.com/r/ericdaugherty/ibcmonitor).
 
 Usage:
@@ -36,7 +38,6 @@ Application Options:
   -o, --csvOutputFile=    Path to csv of daily cycles.
   -f, --emailFrom=        The email address to use for the FROM setting.
   -t, --emailTo=          The email address to use for the TO setting. Can specify multiple.
-      --emailSubject=     The email address to use for the FROM setting. (default: IBC Boiler Alert)
   -s, --emailServer=      The SMTP Server to use to send the email.
       --emailServerPort=  The port to use to connect to the SMTP Server (default: 587)
   -l, --emailUser=        The SMTP Username to use, if needed.
