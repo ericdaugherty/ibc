@@ -10,10 +10,11 @@ import (
 
 // System Status Constants
 const (
-	Standby     = 0
-	Igniting    = 1
-	Heating     = 3
-	Circulating = 4
+	Standby      = 0
+	Igniting     = 1
+	Heating      = 3
+	Circulating  = 4
+	Initializing = 6
 )
 
 // Boiler represents a specific IBC Boiler to interact with.

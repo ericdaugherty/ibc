@@ -300,7 +300,8 @@ func checkErrors() {
 	if (boilerData.Status != ibc.Standby &&
 		boilerData.Status != ibc.Igniting &&
 		boilerData.Status != ibc.Heating &&
-		boilerData.Status != ibc.Circulating) ||
+		boilerData.Status != ibc.Circulating &&
+		boilerData.Status != ibc.Initializing) ||
 		boilerData.Warnings > 0 {
 		if time.Now().After(lastEmailSent.Add(time.Duration(opts.EmailMuteDuration) * time.Minute)) {
 			emailStatus()
