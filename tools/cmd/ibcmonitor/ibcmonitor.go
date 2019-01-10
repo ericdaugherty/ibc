@@ -75,6 +75,7 @@ var fileRowLength = 2 * (6 + (3 * 5)) // Assume 2 bytes per Char, Date + 2 digit
 var opts struct {
 	BoilerURL         string   `short:"u" long:"url" description:"URL of the Boiler, ex -u \"http://192.168.10.2/\"" required:"true"`
 	DailyLogFile      string   `short:"o" long:"csvOutputFile" description:"Path to csv of daily cycles." required:"true"`
+	IgnoreWarnings    bool     `short:"w" long:"ignoreWarnings" description:"If set, alerts will NOT be sent for warnings"`
 	EmailFrom         string   `short:"f" long:"emailFrom" description:"The email address to use for the FROM setting." required:"true"`
 	EmailTo           []string `short:"t" long:"emailTo" description:"The email address to use for the TO setting. Can specify multiple." required:"true"`
 	EmailServer       string   `short:"s" long:"emailServer" description:"The SMTP Server to use to send the email." required:"true"`
@@ -302,7 +303,7 @@ func checkErrors() {
 		boilerData.Status != ibc.Heating &&
 		boilerData.Status != ibc.Circulating &&
 		boilerData.Status != ibc.Initializing) ||
-		boilerData.Warnings > 0 {
+		(boilerData.Warnings > 0 && !opts.IgnoreWarnings) {
 		if time.Now().After(lastEmailSent.Add(time.Duration(opts.EmailMuteDuration) * time.Minute)) {
 			emailStatus()
 		}

@@ -1,0 +1,29 @@
+FROM golang:latest as builder
+
+# Set the working directory outside $GOPATH to enable the support for modules.
+WORKDIR /src
+
+# Fetch dependencies first; they are less susceptible to change on every build
+# and will therefore be cached for speeding up the next build
+COPY ./go.mod ./go.sum ./
+RUN go mod download
+
+# Import the code from the context.
+COPY ./ ./
+
+WORKDIR tools/cmd/ibcmonitor
+
+# Build the executable to `/app`. Mark the build as statically linked.
+RUN GOOS=linux CGO_ENABLED=0 go build \
+    -installsuffix 'static' \
+    -o /ibcmonitor .
+
+
+FROM alpine:latest 
+RUN apk add --no-cache \
+    tzdata \
+    ca-certificates
+RUN mkdir /lib64 && ln -s /lib/libc.musl-x86_64.so.1 /lib64/ld-linux-x86-64.so.2
+WORKDIR /root/
+COPY --from=builder /ibcmonitor .
+ENTRYPOINT [ "./ibcmonitor" ]
