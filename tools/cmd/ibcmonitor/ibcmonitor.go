@@ -4,10 +4,12 @@ import (
 	"bufio"
 	"bytes"
 	"context"
+	"encoding/json"
 	"fmt"
 	"html/template"
 	"io"
 	"log"
+	"net/http"
 	"os"
 	"os/signal"
 	"strconv"
@@ -72,18 +74,24 @@ var lastDateRecorded int
 var lastEmailSent time.Time
 var fileRowLength = 2 * (6 + (3 * 5)) // Assume 2 bytes per Char, Date + 2 digits and comma for total cycles pluse each load.
 
+type webHookBody struct {
+	Restart    bool                    `json:"restart"`
+	BoilerData ibc.BoilerExtDetailData `json:"boilerData"`
+}
+
 var opts struct {
 	BoilerURL         string   `short:"u" long:"url" description:"URL of the Boiler, ex -u \"http://192.168.10.2/\"" required:"true"`
 	DailyLogFile      string   `short:"o" long:"csvOutputFile" description:"Path to csv of daily cycles." required:"true"`
 	IgnoreWarnings    bool     `short:"w" long:"ignoreWarnings" description:"If set, alerts will NOT be sent for warnings"`
-	EmailFrom         string   `short:"f" long:"emailFrom" description:"The email address to use for the FROM setting." required:"true"`
-	EmailTo           []string `short:"t" long:"emailTo" description:"The email address to use for the TO setting. Can specify multiple." required:"true"`
-	EmailServer       string   `short:"s" long:"emailServer" description:"The SMTP Server to use to send the email." required:"true"`
+	EmailFrom         string   `short:"f" long:"emailFrom" description:"The email address to use for the FROM setting."`
+	EmailTo           []string `short:"t" long:"emailTo" description:"The email address to use for the TO setting. Can specify multiple."`
+	EmailServer       string   `short:"s" long:"emailServer" description:"The SMTP Server to use to send the email."`
 	EmailPort         int      `long:"emailServerPort" description:"The port to use to connect to the SMTP Server" default:"587"`
 	EmailUser         string   `short:"l" long:"emailUser" description:"The SMTP Username to use, if needed."`
 	EmailPass         string   `short:"p" long:"emailPass" description:"The SMTP Password to use, if needed."`
 	EmailMuteDuration int      `short:"m" long:"emailMuteMinutes" description:"The amount of time to wait between sending emails." default:"60"`
-	EmailOnStartup    bool     `long:"emailOnStart" description:"Send an email on startup when this flag is present."`
+	AlertOnStartup    bool     `long:"alertOnStart" description:"Send an email and/or webhook on startup when this flag is present."`
+	AlertWebhookURL   string   `long:"alertURL" description:"Post a JSON message to a webhook URL on each Alert."`
 }
 var parser = flags.NewParser(&opts, flags.Default)
 
@@ -97,6 +105,13 @@ func main() {
 		} else {
 			os.Exit(1)
 		}
+	}
+
+	if opts.EmailServer == "" {
+		log.Println("Email Server not configured.  Emails disabled.")
+	}
+	if opts.AlertWebhookURL == "" {
+		log.Println("Webhook Alert URL not specified.  Webhook Alerts disabled.")
 	}
 
 	b = ibc.Boiler{BaseURL: opts.BoilerURL}
@@ -129,8 +144,13 @@ func monitor(ctx context.Context) {
 	ticker := time.NewTicker(5 * time.Minute)
 	t := time.Now()
 	recordDailyCycles(t)
-	if opts.EmailOnStartup {
-		emailStatus()
+	if opts.AlertOnStartup {
+		data, err := b.GetBoilerData()
+		if err != nil {
+			log.Fatalln("Error getting data from IBC Boiler", err)
+		}
+		emailStatus(data)
+		sendAlertWebhook(data, true)
 	} else {
 		checkErrors()
 	}
@@ -306,20 +326,20 @@ func checkErrors() {
 		boilerData.Status != ibc.Initializing) ||
 		(boilerData.Warnings > 0 && !opts.IgnoreWarnings) {
 		if time.Now().After(lastEmailSent.Add(time.Duration(opts.EmailMuteDuration) * time.Minute)) {
-			emailStatus()
+			emailStatus(boilerData)
+			sendAlertWebhook(boilerData, false)
 		}
 	}
 }
 
-func emailStatus() {
+func emailStatus(boilerData ibc.BoilerData) {
+	if opts.EmailServer == "" {
+		return
+	}
+
 	emailBuf := new(bytes.Buffer)
 	emailBuf.WriteString("<body>")
 
-	boilerData, err := b.GetBoilerData()
-	if err != nil {
-		log.Println("Error retrieving data: ", err)
-		return
-	}
 	extDetail, err := b.GetBoilerExtDetailData()
 	if err != nil {
 		log.Println("Error retrieving data: ", err)
@@ -374,4 +394,40 @@ func emailResult(subject string, body string) {
 		return
 	}
 	lastEmailSent = time.Now()
+}
+
+func sendAlertWebhook(boilerData ibc.BoilerData, restart bool) {
+
+	extDetail, err := b.GetBoilerExtDetailData()
+	if err != nil {
+		log.Println("Error retrieving data: ", err)
+		return
+	}
+
+	bodyJSON := &webHookBody{
+		Restart:    restart,
+		BoilerData: extDetail,
+	}
+
+	postBody, err := json.Marshal(bodyJSON)
+	if err != nil {
+		log.Println("Error marshaling struct into json for POST.")
+		return
+	}
+
+	req, err := http.NewRequest("POST", opts.AlertWebhookURL, bytes.NewBuffer(postBody))
+	if err != nil {
+		log.Println("Error creating HTTP POST Request for WebHook.", err.Error())
+		return
+	}
+	req.Header.Set("Content-Type", "application/json")
+
+	client := &http.Client{}
+	resp, err := client.Do(req)
+	if err != nil {
+		panic(err)
+	}
+	defer resp.Body.Close()
+
+	log.Println("POSTed WebHook, Status: ", resp.Status)
 }
