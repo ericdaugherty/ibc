@@ -74,7 +74,13 @@ var lastDateRecorded int
 var lastEmailSent time.Time
 var fileRowLength = 2 * (6 + (3 * 5)) // Assume 2 bytes per Char, Date + 2 digits and comma for total cycles pluse each load.
 
-type webHookBody struct {
+type webHookStatsBody struct {
+	Date        string `json:"date"`
+	Load1Cycles int    `json:"load1cycles"`
+	Load2Cycles int    `json:"load2cycles"`
+}
+
+type webHookAlertBody struct {
 	Restart    bool                    `json:"restart"`
 	BoilerData ibc.BoilerExtDetailData `json:"boilerData"`
 }
@@ -92,6 +98,7 @@ var opts struct {
 	EmailMuteDuration int      `short:"m" long:"emailMuteMinutes" description:"The amount of time to wait between sending emails." default:"60"`
 	AlertOnStartup    bool     `long:"alertOnStart" description:"Send an email and/or webhook on startup when this flag is present."`
 	AlertWebhookURL   string   `long:"alertURL" description:"Post a JSON message to a webhook URL on each Alert."`
+	StatsWebhookURL   string   `long:"statsURL" description:"Post a JSON message to a webhook URL each day with Stats."`
 }
 var parser = flags.NewParser(&opts, flags.Default)
 
@@ -171,6 +178,7 @@ func recordDailyCycles(t time.Time) {
 	sendWeekly := false
 	// Check to see if we should record a new daily log. Record only once after 11:50p each day.
 	if t.After(time.Date(t.Year(), t.Month(), t.Day(), 23, 50, 0, 0, t.Location())) && t.YearDay() != lastDateRecorded {
+
 		lastDateRecorded = t.YearDay()
 		sendWeekly = t.Weekday() == time.Saturday
 
@@ -180,12 +188,17 @@ func recordDailyCycles(t time.Time) {
 			return
 		}
 
-		out := fmt.Sprintf("%s,%d", t.Format("2006-01-02"), bedd.Cycles)
 		lsd, err := b.GetLoadStatusData()
 		if err != nil {
 			log.Println(err)
 			return
 		}
+
+		if opts.StatsWebhookURL != "" {
+			sendStatsWebhook(lsd)
+		}
+
+		out := fmt.Sprintf("%s,%d", t.Format("2006-01-02"), bedd.Cycles)
 		loadCycles := make([]int, 4)
 		for i := range loadCycles {
 			if i < len(lsd) {
@@ -396,6 +409,17 @@ func emailResult(subject string, body string) {
 	lastEmailSent = time.Now()
 }
 
+func sendStatsWebhook(lsd []ibc.LoadStatusData) {
+
+	bodyJSON := &webHookStatsBody{
+		Date:        time.Now().Format("2016-01-02"),
+		Load1Cycles: lsd[0].Cycles,
+		Load2Cycles: lsd[1].Cycles,
+	}
+
+	postWebHook(bodyJSON, opts.StatsWebhookURL)
+}
+
 func sendAlertWebhook(boilerData ibc.BoilerData, restart bool) {
 
 	extDetail, err := b.GetBoilerExtDetailData()
@@ -404,10 +428,14 @@ func sendAlertWebhook(boilerData ibc.BoilerData, restart bool) {
 		return
 	}
 
-	bodyJSON := &webHookBody{
+	bodyJSON := &webHookAlertBody{
 		Restart:    restart,
 		BoilerData: extDetail,
 	}
+	postWebHook(bodyJSON, opts.AlertWebhookURL)
+}
+
+func postWebHook(bodyJSON interface{}, url string) {
 
 	postBody, err := json.Marshal(bodyJSON)
 	if err != nil {
@@ -415,7 +443,7 @@ func sendAlertWebhook(boilerData ibc.BoilerData, restart bool) {
 		return
 	}
 
-	req, err := http.NewRequest("POST", opts.AlertWebhookURL, bytes.NewBuffer(postBody))
+	req, err := http.NewRequest("POST", url, bytes.NewBuffer(postBody))
 	if err != nil {
 		log.Println("Error creating HTTP POST Request for WebHook.", err.Error())
 		return
@@ -425,9 +453,9 @@ func sendAlertWebhook(boilerData ibc.BoilerData, restart bool) {
 	client := &http.Client{}
 	resp, err := client.Do(req)
 	if err != nil {
-		panic(err)
+		log.Println("Error posting HTTP to WebHook", url, err)
 	}
 	defer resp.Body.Close()
 
-	log.Println("POSTed WebHook, Status: ", resp.Status)
+	log.Printf("POSTed WebHook %v, Status: %v\n", url, resp.Status)
 }
