@@ -412,7 +412,7 @@ func emailResult(subject string, body string) {
 func sendStatsWebhook(lsd []ibc.LoadStatusData) {
 
 	bodyJSON := &webHookStatsBody{
-		Date:        time.Now().Format("2016-01-02"),
+		Date:        time.Now().Format("2006-01-02"),
 		Load1Cycles: lsd[0].Cycles,
 		Load2Cycles: lsd[1].Cycles,
 	}
