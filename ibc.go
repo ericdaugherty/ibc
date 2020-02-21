@@ -39,6 +39,26 @@ type BoilerStatusData struct {
 	Warning                 int `json:"warning"`
 }
 
+// BoilerLogData represents the data returned by the ReqBoilerLogData request
+type BoilerLogData struct {
+	//"rbid": 0
+	//"object_no": 6
+	PowerOnHrs   int `json:"PowerOnHrs"`
+	BurnerOnHrs  int `json:"BurnerOnHrs"`
+	Load1OnTime  int `json:"Load1OnTime"`
+	Load2OnTime  int `json:"Load2OnTime"`
+	Load3OnTime  int `json:"Load3OnTime"`
+	Load4OnTime  int `json:"Load4OnTime"`
+	RemoteOnTime int `json:"RemoteOnTime"`
+	Starts       int `json:"Starts"`
+	Trials       int `json:"Trials"`
+	Errors       int `json:"Errors"`
+	Warnings     int `json:"Warnings"`
+	LogEntries   int `json:"LogEntries"`
+	Cycles       int `json:"Cycles"`
+	BiasCount    int `json:"BiasCount"`
+}
+
 // BoilerData represents the data returend by the ReqBoilerData request
 type BoilerData struct {
 	//"rbid": 0
@@ -268,6 +288,13 @@ func (b Boiler) GetDataForLoad(requestNumber int, loadNumber int) (interface{}, 
 func (b Boiler) GetBoilerStatusData() (BoilerStatusData, error) {
 	reqObj := requestObject{ObjectNum: 100, ObjectRequest: ReqBoilerStatusData, BoilerNum: 0, LoadNum: 0}
 	var respObj = BoilerStatusData{}
+	return respObj, b.getData(reqObj, &respObj)
+}
+
+// GetBoilerLogData returns the BoilerStatusData for the current boiler.
+func (b Boiler) GetBoilerLogData() (BoilerLogData, error) {
+	reqObj := requestObject{ObjectNum: 100, ObjectRequest: ReqBoilerLogData, BoilerNum: 0, LoadNum: 0}
+	var respObj = BoilerLogData{}
 	return respObj, b.getData(reqObj, &respObj)
 }
 
