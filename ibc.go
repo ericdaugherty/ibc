@@ -19,6 +19,16 @@ const (
 	Initializing = 6
 )
 
+// G3 soft errors. TODO: Updated to handle non-G3 soft errors.
+var hardErrorsBitMask = [...]int{0x01, 0x10, 0x20, 0x02, 0x04, 0x08}
+var hardErrors = [...]string{"Ignition Trials Exceeded", "Roll Out Switch", "Low Water Cutoff", "Module High Current", "Sec/Indoor Sensor", "Low Water Cutoff"}
+var softErrors1BitMask = [...]int{0x0001, 0x0004, 0x0008, 0x0010, 0x0020, 0x0040, 0x0080}
+var softErrors1 = [...]string{"Flame Sig/Vent Blocked", "Low RPM/Air Flow", "No/Low Water Flow", "Water High Limit", "Vent High Limit", "Interlock 1 Open", "Interlock 2 Open"}
+var softErrors2BitMask = [...]int{0x0100, 0x0200, 0x0400, 0x0800, 0x2000, 0x4000, 0x8000, 0x1000}
+var softErrors2 = [...]string{"Inlet Pressure Sensor", "Fan Pressure", "No/Low Water Flow", "Low Module Current", "See Error Log/SIM", "Low Water Pressure", "Max deltaT Exceeded", "Reversed Flow"}
+var systemErrorBitMask = [...]int{0x01, 0x02, 0x04, 0x08, 0x10, 0x20, 0x40, 0x80}
+var systemErrors = [...]string{"CANbus", "CGI Task", "I2C Bus 0", "I2C Bus 1", "BACnet Task", "GPIO Expander", "LCD Module/Bus", "FRAM Module"}
+
 // Boiler represents a specific IBC Boiler to interact with.
 type Boiler struct {
 	BaseURL string
@@ -57,6 +67,33 @@ type BoilerLogData struct {
 	LogEntries   int `json:"LogEntries"`
 	Cycles       int `json:"Cycles"`
 	BiasCount    int `json:"BiasCount"`
+}
+
+// BoilerErrorLogData represents the data for an single entry in the error log.
+type BoilerErrorLogData struct {
+	//"rbid": 0
+	//"object_no": 7
+	//log_no:
+	Time           string `json:"Time"`
+	Date           string `json:"Date"`
+	MinErr         int    `json:"MinErr"`
+	MajErr         int    `json:"MajErr"`
+	SysErr         int    `json:"SysErr"`
+	HeatOut        int    `json:"HeatOut"`
+	FanRPM         int    `json:"FanRPM"`
+	InletTemp      int    `json:"InletTemp"`
+	OutletTemp     int    `json:"OutletTemp"`
+	BoardTemp      int    `json:"BoardTemp"`
+	DiffPressure   int    `json:"DiffPressure"`
+	InletTRate     int    `json:"InletTRate"`
+	OutletTRate    int    `json:"OutletTRate"`
+	InletPressure  int    `json:"InletPressure"`
+	OutletPressure int    `json:"OutletPressure"`
+	FlameSense     int    `json:"FlameSense"`
+	SIMFlame       int    `json:"SIM_Flame"`
+	SIMStatus      int    `json:"SIM_Status"`
+	FanDutyCycle   int    `json:"FanDutyCycle"`
+	BVGauge        int    `json:"BV_Gauge"`
 }
 
 // BoilerData represents the data returend by the ReqBoilerData request
@@ -266,6 +303,7 @@ type requestObject struct {
 	ObjectRequest int `json:"object_request"`
 	BoilerNum     int `json:"boiler_no"`
 	LoadNum       int `json:"load_no,omitempty"`
+	ObjectIndex   int `json:"object_index"`
 }
 
 var loadNames = [...]string{"Off", "DHW", "Reset Heating", "Set Point", "External Control", "Manual Control", "Zone Of"}
@@ -295,6 +333,13 @@ func (b Boiler) GetBoilerStatusData() (BoilerStatusData, error) {
 func (b Boiler) GetBoilerLogData() (BoilerLogData, error) {
 	reqObj := requestObject{ObjectNum: 100, ObjectRequest: ReqBoilerLogData, BoilerNum: 0, LoadNum: 0}
 	var respObj = BoilerLogData{}
+	return respObj, b.getData(reqObj, &respObj)
+}
+
+// GetBoilerErrLogData returns the BoilerErrorLogData for the specified logEntryNumber.
+func (b Boiler) GetBoilerErrLogData(logEntryNumber int) (BoilerErrorLogData, error) {
+	reqObj := requestObject{ObjectNum: 100, ObjectRequest: ReqBoilerErrorLogData, BoilerNum: 0, ObjectIndex: logEntryNumber}
+	var respObj = BoilerErrorLogData{}
 	return respObj, b.getData(reqObj, &respObj)
 }
 
@@ -374,6 +419,81 @@ func getLoadNumbersFromBits(in int) []int {
 		bit <<= 1
 	}
 	return lt
+}
+
+// GetErrorString returns a descripton of the error code specified. Assumes G3 Boilers
+func GetErrorString(minErr int, majErr int, sysErr int) string {
+	if sysErr > 0 {
+		for i := 0; i < len(systemErrorBitMask); i++ {
+			if (sysErr & systemErrorBitMask[i]) > 0 {
+				return systemErrors[i]
+			}
+		}
+	}
+
+	softToHardErrors := 0
+	hardToSoftErrors := 0
+	if (minErr & 0x10) > 0 {
+		softToHardErrors |= 0x20
+	}
+	if (minErr & 0x20) > 0 {
+		softToHardErrors |= 0x10
+	}
+	if (majErr & 0x4) > 0 {
+		hardToSoftErrors = 0x4
+	}
+	// Remove these bits from their associated errors.
+	minErr = minErr &^ 0x10
+	minErr = minErr &^ 0x20
+	majErr = majErr &^ 0x4
+
+	if majErr > 0 || softToHardErrors > 0 {
+		errString := "Unknown"
+		for i := 0; i < len(hardErrorsBitMask); i++ {
+			if majErr&hardErrorsBitMask[i] > 0 {
+				errString = hardErrors[i]
+				if (hardErrorsBitMask[i] & 0x20) > 0 {
+					errString = "Vent High Pressure"
+				} else if (hardErrorsBitMask[i] & 0x4) > 0 {
+					errString = "Temperature Probe Error"
+				}
+			}
+		}
+
+		if softToHardErrors > 0 {
+			if (softToHardErrors & 0x10) > 0 {
+				errString = "Vent High Limit"
+			}
+
+			if (softToHardErrors & 0x20) > 0 {
+				errString = "Water High Limit"
+			}
+		}
+		return errString
+	}
+
+	if minErr > 0 || hardToSoftErrors > 0 {
+		errString := "Unknown"
+		for i := 0; i < len(softErrors1BitMask); i++ {
+			if minErr&softErrors1BitMask[i] > 0 {
+				errString = softErrors1[i]
+			}
+		}
+
+		if hardToSoftErrors > 0 {
+			errString = "Temp. Probe Error"
+		}
+
+		for i := 0; i < len(softErrors2BitMask); i++ {
+			if minErr&softErrors2BitMask[i] > 0 {
+				errString = softErrors2[i]
+			}
+		}
+
+		return errString
+	}
+
+	return "Unknown"
 }
 
 func (b Boiler) getData(reqObj requestObject, respObj interface{}) error {
