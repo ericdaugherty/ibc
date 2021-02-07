@@ -6,6 +6,7 @@ This package simplifies access to IBC Boiler status information. At this time, t
 
 The IBC Boiler must be internet/intranet connected and be accessible. It is not reccomended to expose the IBC Boiler to the internet so this library is best accessed via intranet.
 
-This repository also provides the ibcmonitor tool, which allows you to monitor the statistics and status of your boiler, and can be deployed as a docker image. Check it out [here](https://github.com/ericdaugherty/ibc/tree/master/tools/cmd/ibcmonitor)
-
-See the cmd/ibcstatus tool for sample usage.
+This repository also provides a set of command line tools that provide basic monitoring and logging functionality.
+- [IBC Logger](https://github.com/ericdaugherty/ibc/tree/master/tools/cmd/ibclogger)
+- [IBC Monitor](https://github.com/ericdaugherty/ibc/tree/master/tools/cmd/ibcmonitor)
+- [IBC Status](https://github.com/ericdaugherty/ibc/tree/master/tools/cmd/ibcstatus)

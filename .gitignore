@@ -1,4 +1,4 @@
 reference
 *.sh
 /tools/cmd/test
-daily.csv
+*.csv
